@@ -10,29 +10,21 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Setup Replit Auth
   await setupAuth(app);
   registerAuthRoutes(app);
 
-  // Helper to handle async errors
   const asyncHandler = (fn: Function) => (req: any, res: any, next: any) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 
-  // ============================================
-  // TEAMS
-  // ============================================
+  // Teams
   app.get(api.teams.list.path, asyncHandler(async (req: any, res: any) => {
-    // In a real app, filtering by user would happen here
-    // For now, let's just return all teams (demo mode)
-    // Or filter by logged in user if available
     const userId = req.user?.claims?.sub;
     if (userId) {
       const teams = await storage.getTeamsByUserId(userId);
       res.json(teams);
     } else {
-       // Demo fallback
-       res.json([]);
+      res.json([]);
     }
   }));
 
@@ -55,11 +47,9 @@ export async function registerRoutes(
     res.json(team);
   }));
 
-  // ============================================
-  // PROSPECTS
-  // ============================================
+  // Prospects
   app.get(api.prospects.list.path, asyncHandler(async (req: any, res: any) => {
-    const teamId = req.query.teamId ? Number(req.query.teamId) : 1; // Default to team 1 for demo
+    const teamId = req.query.teamId ? Number(req.query.teamId) : 1;
     const filters = {
       stage: req.query.stage as string,
       assignedToId: req.query.assignedToId as string
@@ -91,29 +81,23 @@ export async function registerRoutes(
     try {
       const input = api.prospects.update.input.parse(req.body);
       const prospectId = Number(req.params.id);
-      
-      // Get current prospect to check for stage change
+
       const currentProspect = await storage.getProspect(prospectId);
       if (!currentProspect) {
         return res.status(404).json({ message: "Prospect not found" });
       }
-      
+
       const prospect = await storage.updateProspect(prospectId, input);
-      
-      // Log activity if stage changed
+
       if (input.stage && input.stage !== currentProspect.stage) {
         const userId = req.user?.claims?.sub || "system";
         await storage.createActivity({
           prospectId: prospect.id,
           userId,
           type: "STAGE_CHANGED",
-          details: {
-            fromStage: currentProspect.stage,
-            toStage: input.stage
-          }
+          details: { fromStage: currentProspect.stage, toStage: input.stage }
         });
-        
-        // Update timing fields based on new stage
+
         const timingUpdates: any = {};
         if (input.stage === "WARMING" && !currentProspect.warmingStartedAt) {
           timingUpdates.warmingStartedAt = new Date();
@@ -126,16 +110,16 @@ export async function registerRoutes(
         } else if ((input.stage === "WON" || input.stage === "LOST") && !currentProspect.closedAt) {
           timingUpdates.closedAt = new Date();
         }
-        
+
         if (Object.keys(timingUpdates).length > 0) {
           await storage.updateProspect(prospectId, timingUpdates);
         }
       }
-      
+
       res.json(prospect);
     } catch (err) {
       if (err instanceof z.ZodError) {
-         return res.status(400).json({ message: err.errors[0].message });
+        return res.status(400).json({ message: err.errors[0].message });
       }
       throw err;
     }
@@ -146,17 +130,15 @@ export async function registerRoutes(
     res.status(204).send();
   }));
 
-  // Bulk import prospects from CSV (requires auth)
   app.post(api.prospects.import.path, asyncHandler(async (req: any, res: any) => {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    
+
     try {
       const input = api.prospects.import.input.parse(req.body);
       const userId = req.user.claims?.sub || "system";
-      
-      // Transform imported data to prospect format
+
       const prospectsToCreate = input.prospects.map(p => ({
         teamId: input.teamId,
         firstName: p.firstName,
@@ -169,10 +151,9 @@ export async function registerRoutes(
         twitterHandle: p.twitterHandle,
         stage: "IDENTIFIED" as const
       }));
-      
-      // TODO: Add duplicate detection based on email/linkedinUrl
+
       const created = await storage.createProspectsBulk(prospectsToCreate);
-      
+
       res.status(201).json({
         imported: created.length,
         duplicates: 0
@@ -185,9 +166,7 @@ export async function registerRoutes(
     }
   }));
 
-  // ============================================
-  // TASKS
-  // ============================================
+  // Tasks
   app.get(api.tasks.list.path, asyncHandler(async (req: any, res: any) => {
     const teamId = req.query.teamId ? Number(req.query.teamId) : 1;
     const filters = {
@@ -216,9 +195,7 @@ export async function registerRoutes(
     res.json(task);
   }));
 
-  // ============================================
-  // TEMPLATES
-  // ============================================
+  // Templates
   app.get(api.templates.list.path, asyncHandler(async (req: any, res: any) => {
     const teamId = req.query.teamId ? Number(req.query.teamId) : 1;
     const filters = { type: req.query.type as string };
@@ -243,9 +220,7 @@ export async function registerRoutes(
     res.status(204).send();
   }));
 
-  // ============================================
-  // QC QUEUE
-  // ============================================
+  // QC Queue
   app.get(api.qc.list.path, asyncHandler(async (req: any, res: any) => {
     const filters = { status: req.query.status as string };
     const items = await storage.getQCItems(filters);
@@ -264,15 +239,12 @@ export async function registerRoutes(
     res.json(item);
   }));
 
-  // ============================================
-  // ANALYTICS
-  // ============================================
+  // Analytics
   app.get(api.analytics.overview.path, asyncHandler(async (req: any, res: any) => {
     const stats = await storage.getAnalyticsOverview();
     res.json(stats);
   }));
 
-  // Initialize DB with seed data
   await seedDatabase();
 
   return httpServer;
@@ -280,8 +252,7 @@ export async function registerRoutes(
 
 async function seedDatabase() {
   const demoUserId = "demo-user";
-  
-  // Create a demo user in auth storage so keys work
+
   await authStorage.upsertUser({
     id: demoUserId,
     email: "demo@example.com",
@@ -295,7 +266,6 @@ async function seedDatabase() {
 
   console.log("Seeding database...");
 
-  // Create Team
   const team = await storage.createTeam({
     name: "Growth Team",
     ownerId: demoUserId,
@@ -307,14 +277,12 @@ async function seedDatabase() {
     }
   });
 
-  // Create Team Members
   await storage.addTeamMember({
     teamId: team.id,
     userId: demoUserId,
     role: "ADMIN"
   });
 
-  // Create Prospects
   const prospects = [
     {
       teamId: team.id,
@@ -353,7 +321,6 @@ async function seedDatabase() {
     await storage.createProspect(p);
   }
 
-  // Create Templates
   await storage.createTemplate({
     teamId: team.id,
     name: "General Connection Request",
