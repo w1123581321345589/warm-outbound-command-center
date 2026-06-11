@@ -2,14 +2,9 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex 
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { users } from "./models/auth"; // Import Replit Auth users
+import { users } from "./models/auth";
 
-// Re-export auth models
 export * from "./models/auth";
-
-// ============================================
-// ENUMS (Application Level)
-// ============================================
 
 export const TeamMemberRole = {
   ADMIN: 'ADMIN',
@@ -93,15 +88,10 @@ export const TaskStatus = {
   SKIPPED: 'SKIPPED'
 } as const;
 
-
-// ============================================
-// TABLE DEFINITIONS
-// ============================================
-
 export const teams = pgTable("teams", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  ownerId: text("owner_id").notNull(), // Links to users.id
+  ownerId: text("owner_id").notNull(),
   settings: jsonb("settings").default({
     warmingPeriodHours: 36,
     firstTouchToVideoHours: 72,
@@ -138,8 +128,6 @@ export const prospects = pgTable("prospects", {
   customFields: jsonb("custom_fields").default({}),
   stage: text("stage").notNull().default(ProspectStage.IDENTIFIED),
   assignedToId: text("assigned_to_id"),
-  
-  // Timing fields
   warmingStartedAt: timestamp("warming_started_at"),
   firstTouchSentAt: timestamp("first_touch_sent_at"),
   videoSentAt: timestamp("video_sent_at"),
@@ -147,7 +135,6 @@ export const prospects = pgTable("prospects", {
   closedAt: timestamp("closed_at"),
   closeReason: text("close_reason"),
   notes: text("notes"),
-
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -203,10 +190,6 @@ export const tasks = pgTable("tasks", {
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
-
-// ============================================
-// RELATIONS
-// ============================================
 
 export const usersRelations = relations(users, ({ many }) => ({
   teamMemberships: many(teamMembers),
@@ -307,10 +290,6 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
   }),
 }));
 
-// ============================================
-// ZOD SCHEMAS
-// ============================================
-
 export const insertTeamSchema = createInsertSchema(teams).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({ id: true, createdAt: true });
 export const insertProspectSchema = createInsertSchema(prospects).omit({ 
@@ -328,7 +307,6 @@ export const insertTemplateSchema = createInsertSchema(templates).omit({ id: tru
 export const insertQCQueueItemSchema = createInsertSchema(qcQueueItems).omit({ id: true, submittedAt: true, reviewedAt: true });
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, completedAt: true });
 
-// Types
 export type Team = typeof teams.$inferSelect;
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type Prospect = typeof prospects.$inferSelect;
